@@ -66,44 +66,46 @@ In order to get familiar with Linkerd, you can play with Linkerd's demo app in t
 # Demo app
 remote "curl -sL https://run.linkerd.io/emojivoto.yml | kubectl apply -f -"
 remote "cat <<EOF | kubectl apply -f -
-apiVersion: extensions/v1beta1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: emojivoto-gateway
+  namespace: emojivoto
+spec:
+  gatewayClassName: approuting-istio
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
   name: emojivoto
   namespace: emojivoto
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    ingress.kubernetes.io/ssl-redirect: \"true\"
 spec:
-  tls:
-  - hosts:
-    - emojivoto.$azfw_ip.nip.io
-    secretName: tls-secret
+  parentRefs:
+  - name: emojivoto-gateway
   rules:
-  - host: emojivoto.$azfw_ip.nip.io
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: web-svc
-          servicePort: 80
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: web-svc
+      port: 80
 EOF"
 remote "kubectl get -n emojivoto deploy -o yaml | linkerd inject - | kubectl apply -f -"
 remote "linkerd -n emojivoto stat deploy"
 # remote "linkerd -n emojivoto top deploy"  # You need to run this in a TTY
 ```
 
-### Ingress controllers
+### Managed ingress gateway
 
-We can inject linkerd in the nginx ingress controller. Make sure to read [Linkerd - Using Ingress](https://linkerd.io/2/tasks/using-ingress/). TL;DR: you need to use the annotation `nginx.ingress.kubernetes.io/configuration-snippet` in your ingress definitions.
-
-```bash
-# Inject linkerd in ingress controllers
-remote "kubectl get -n nginx deploy -o yaml | linkerd inject - | kubectl apply -f -"
-remote "kubectl -n default patch ingress web -p '{\"metadata\": {\"annotations\": {\"nginx.ingress.kubernetes.io/configuration-snippet\": \"proxy_set_header l5d-dst-override \$service_name.\$namespace.svc.cluster.local:\$service_port;\\n\"}}}'"
-remote "kubectl -n test patch ingress web -p '{\"metadata\": {\"annotations\": {\"nginx.ingress.kubernetes.io/configuration-snippet\": \"proxy_set_header l5d-dst-override \$service_name.\$namespace.svc.cluster.local:\$service_port;\\n\"}}}'"
-remote "kubectl -n nginx rollout restart deploy/nginx-nginx-ingress-controller"
-```
+The application-routing gateway is AKS-managed. Do not inject Linkerd sidecars into its proxy pods or apply controller-specific annotations. You can mesh the application workloads, but requests from the gateway to a meshed workload won't be part of Linkerd's mutually authenticated mesh unless you choose a supported integration. The demo creates its own gateway in the `emojivoto` namespace; check its address with `kubectl get gateway emojivoto-gateway -n emojivoto`. See [Gateway API ingress with AKS application routing](https://learn.microsoft.com/azure/aks/app-routing-gateway-api?pivots=azure-cli).
 
 ### Dedicated namespace
 
@@ -117,7 +119,7 @@ identity_client_id=$(az identity show -g $node_rg -n $identity_name --query clie
 tmp_file=/tmp/fullapp.yaml
 file=fullapp.yaml
 cp ./Solutions/$file $tmp_file
-sed -i "s|__ingress_class__|nginx|g" $tmp_file
+# Gateway API routes are separate from the application Deployment manifests.
 sed -i "s|__ingress_ip__|${azfw_ip}|g" $tmp_file
 sed -i "s|__akv_name__|${akv_name}|g" $tmp_file
 sed -i "s|__identity_id__|${identity_id}|g" $tmp_file
@@ -164,8 +166,6 @@ Source                                           Destination           Method   
 web-648d999fd9-5v55l                             api-754f9cd75b-mwt6h  GET         /api/healthcheck       1     5ms     5ms     5ms       100.00%
 web-648d999fd9-5v55l                             api-754f9cd75b-mwt6h  GET         /api/sqlversion        1   243ms   243ms   243ms       100.00%
 web-648d999fd9-5v55l                             api-754f9cd75b-mwt6h  GET         /api/ip                1   873ms   873ms   873ms       100.00%
-nginx-nginx-ingress-controller-6b746b87cf-n67l2  web-648d999fd9-5v55l  GET         /                      1      1s      1s      1s       100.00%
-nginx-nginx-ingress-controller-6b746b87cf-n67l2  web-648d999fd9-5v55l  GET         /favicon.ico           1   665µs   665µs   665µs       100.00%
 ```
 
 If you want more information, you can use the `tap` command:

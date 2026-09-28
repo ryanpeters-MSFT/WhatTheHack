@@ -32,7 +32,7 @@ grafana_admin_password=$(remote "kubectl get secret --namespace default promethe
 sleep 60 # Wait 60 secs until the svc changes from public to private
 grafana_ip=$(remote "kubectl get svc/prometheus-grafana -n default -o json | jq -rc '.status.loadBalancer.ingress[0].ip' 2>/dev/null")
 # NAT rule
-az network firewall nat-rule create -f azfw -g $rg -n nginx \
+az network firewall nat-rule create -f azfw -g $rg -n grafana \
     --source-addresses '*' --protocols TCP \
     --destination-addresses $azfw_ip --translated-address $grafana_ip \
     --destination-ports 8080 --translated-port 80 \
@@ -87,8 +87,8 @@ if [[ "$aks_outbound" == "userDefinedRouting" ]]; then
   endpoint_ip=$azfw_ip
   echo "Using Azure Firewall's IP $azfw_ip as endpoint..."
 else
-  endpoint_ip=$nginx_svc_ip
-  echo "Using Ingress Controller's IP $nginx_svc_ip as endpoint..."
+  endpoint_ip=$ingress_svc_ip
+  echo "Using managed gateway's IP $ingress_svc_ip as endpoint..."
 fi
 # Tests
 echo "Testing if API is reachable (no stress test yet)..."

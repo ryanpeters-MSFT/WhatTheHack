@@ -27,7 +27,7 @@ You need to fulfill these requirements to complete this challenge:
 ### Deploy the sample application
 
 - Deploy an Azure SQL Database if you did not have one from the previous challenge
-- Deploy the API and Web containers, expose them over an ingress controller (consider the Application Gateway Ingress Controller, although it is not required). 
+- Deploy the API and Web containers, expose them through a Gateway API implementation (consider AKS application routing with managed Istio ingress for simplicity, although it is not required).
     - Make sure the links in the section `Direct access to API` of the web page exposed by the Web container are working, as well as the links in the Web menu bar (`Info`, `HTML Healthcheck`, `PHPinfo`, etc)
 
 ## Success Criteria
@@ -49,6 +49,6 @@ These docs might help you achieving these objectives:
 - [Restrict AKS egress traffic](https://docs.microsoft.com/azure/aks/limit-egress-traffic)
 - [Azure SQL Database](https://docs.microsoft.com/azure/azure-sql/azure-sql-iaas-vs-paas-what-is-overview)
 - [AKS Overview](https://docs.microsoft.com/azure/aks/)
-- [Application Gateway Ingress Controller](https://docs.microsoft.com/azure/application-gateway/ingress-controller-overview)
-- [Create an Nginx ingress controller in AKS](https://docs.microsoft.com/azure/aks/ingress-basic?tabs=azure-cli)
-- [Web Application Routing Addon](https://docs.microsoft.com/azure/aks/web-app-routing)
+- [Application Gateway for Containers (AGC)](https://learn.microsoft.com/azure/application-gateway/for-containers/overview) (public frontends only)
+- [AKS application routing with managed Istio ingress and Gateway API](https://learn.microsoft.com/azure/aks/app-routing-gateway-api?pivots=azure-cli)
+- [Managed Gateway API installation](https://learn.microsoft.com/azure/aks/managed-gateway-api)
