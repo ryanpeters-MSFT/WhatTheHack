@@ -33,6 +33,8 @@ Some organizations may wish to complete this hack as a follow-on to, or even a c
 
 In the `/Solutions/Challenge-02/Accelerator` folder, you will find a set of YAML files and a bash shell script that will help students quickly deploy the Whoami sample application from pre-staged container images in Docker Hub to an existing AKS cluster.
 
+The accelerator's web and API Services are internal to the cluster on port 8080; the managed Gateway provides the public LoadBalancer IP on port 80.
+
 For students that are already familiar with deploying applications in Kubernetes, but want to focus on the Azure integrations, you may wish to provide these files to "accelerate" them so they can start the hack with Challenge 3.
 
 If you wish to accelerate your students, you should:
@@ -193,14 +195,6 @@ sed -i "s|__acr_name__|${acr_name}|g" $tmp_file
 sed -i "s|__sqlserver,mysql,postgres__|sqlserver|g" $tmp_file
 sed -i "s|__yes,no__|yes|g" $tmp_file
 kubectl apply -f $tmp_file
-# Get IP address of service
-api_svc_ip=$(kubectl get svc/api -n default -o json | jq -rc '.status.loadBalancer.ingress[0].ip' 2>/dev/null)
-while [[ "$api_svc_ip" == "null" ]]
-do
-    sleep 5
-    api_svc_ip=$(kubectl get svc/api -n default -o json | jq -rc '.status.loadBalancer.ingress[0].ip' 2>/dev/null)
-done
-curl -s "http://${api_svc_ip}:8080/api/healthcheck"
 ```
 
 ```bash
@@ -210,26 +204,9 @@ file=web-public.yaml
 cp ./Solutions/Challenge-02/Public/$file $tmp_file
 sed -i "s|__acr_name__|${acr_name}|g" $tmp_file
 kubectl apply -f $tmp_file
-# Get IP address of service
-web_svc_ip=$(kubectl get svc/web -n default -o json | jq -rc '.status.loadBalancer.ingress[0].ip' 2>/dev/null)
-while [[ "$web_svc_ip" == "null" ]]
-do
-    sleep 5
-    web_svc_ip=$(kubectl get svc/web -n default -o json | jq -rc '.status.loadBalancer.ingress[0].ip' 2>/dev/null)
-done
-curl -s "http://${web_svc_ip}" | grep Healthcheck
 ```
 
-We can now configure the Database firewall to accept connections from our pod:
-
-```bash
-# Update firewall rules
-sqlapi_source_ip=$(curl -s "http://${api_svc_ip}:8080/api/ip" | jq -r .my_public_ip)
-az sql server firewall-rule create -g "$rg" -s "$sql_server_name" -n public_sqlapi_aci-source --start-ip-address "$sqlapi_source_ip" --end-ip-address "$sqlapi_source_ip"
-# az sql server firewall-rule create -g "$rg" -s "$sql_server_name" -n public_sqlapi_aci-source --start-ip-address "0.0.0.0" --end-ip-address "255.255.255.255" # Optionally
-```
-
-Deploy the AKS-managed Istio ingress Gateway (if the cluster was created without the flags above, enable it first with `az aks update -g "$rg" -n "$aks_name" --enable-gateway-api --enable-app-routing-istio`).
+The web and API Services use ClusterIP on port 8080; the Gateway is the only public LoadBalancer and listens on port 80. Deploy the AKS-managed Istio ingress Gateway (if the cluster was created without the flags above, enable it first with `az aks update -g "$rg" -n "$aks_name" --enable-gateway-api --enable-app-routing-istio`).
 
 ```bash
 kubectl get gatewayclass approuting-istio
@@ -246,7 +223,18 @@ tmp_file=/tmp/httproute.yaml
 cp ./Solutions/Challenge-02/httproute.yaml $tmp_file
 sed -i "s|__ingress_ip__|${ingress_svc_ip}|g" $tmp_file
 kubectl apply -f $tmp_file
+curl -s "http://${ingress_svc_ip}.nip.io/api/healthcheck"
+curl -s "http://${ingress_svc_ip}.nip.io/" | grep Healthcheck
 echo "You can browse to http://${ingress_svc_ip}.nip.io"
+```
+
+We can now configure the Database firewall to accept connections from our pod:
+
+```bash
+# update firewall rules
+sqlapi_source_ip=$(curl -s "http://${ingress_svc_ip}.nip.io/api/ip" | jq -r .my_public_ip)
+az sql server firewall-rule create -g "$rg" -s "$sql_server_name" -n public_sqlapi_aci-source --start-ip-address "$sqlapi_source_ip" --end-ip-address "$sqlapi_source_ip"
+# az sql server firewall-rule create -g "$rg" -s "$sql_server_name" -n public_sqlapi_aci-source --start-ip-address "0.0.0.0" --end-ip-address "255.255.255.255" # Optionally
 ```
 
 At this point you should be able to browse to the web page over the managed gateway's public IP address, and see something like this:
