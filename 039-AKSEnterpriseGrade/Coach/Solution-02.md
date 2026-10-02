@@ -254,7 +254,7 @@ Deploying a private AKS cluster requires multiple Azure resources to be deployed
 - Hub & Spoke VNets that are peered to each other
 - An Azure Firewall with proper egress network rules set on it
 - A User Defined Route (UDR)
-- A VM jumpbox with Azure CLI & kubectl CLI installed to access the private AKS cluster
+- A way to access the private API server: Azure Bastion native client tunneling from a trusted workstation, or an optional management VM in a connected VNet
 
 In the `/Solutions/Challenge-02/Private` folder, you will find a set of YAML files that deploy the Whoami sample application to a private AKS cluster.  These YAML files have multiple placeholders in them that need to be replaced with values in order to deploy them to an AKS cluster.
 
@@ -487,7 +487,27 @@ query_netrule='AzureDiagnostics
 az monitor log-analytics query -w "$logws_customerid" --analytics-query "$query_netrule" -o tsv
 ```
 
-You can install a VM in the same vnet and install kubectl to have access to the API.
+### Access the private API server without a jump VM (Azure Bastion)
+
+[Azure Bastion native client tunneling](https://learn.microsoft.com/azure/bastion/bastion-connect-to-aks-private-cluster) lets you use local `kubectl` and `helm` against the private AKS API server without installing a jump VM. Deploy a **Standard or Premium** Bastion with native client support enabled in a VNet that can reach the private cluster; allow for Bastion's own subnet, public IP, and cost. The operator needs the documented Reader access to the cluster, Bastion, and (for peered VNets) target VNet, plus permission to obtain AKS credentials and Kubernetes authorization. Install Azure CLI (with the `aks-preview` extension required by this command), `kubectl`, and Helm locally. Check the [private-cluster connectivity limitations](https://learn.microsoft.com/azure/aks/private-cluster-connect#choose-a-connectivity-option) before choosing this path; AKS currently labels Bastion connectivity **preview** and excludes AKS Automatic and clusters with network resource group lockdown.
+
+From a **local Bash/WSL shell**, after signing in and selecting the correct subscription, use the [AKS Bastion tunnel command](https://learn.microsoft.com/cli/azure/aks/bastion#az-aks-bastion-tunnel). Set `bastion_id` to the resource ID of your already deployed Bastion (it may be in a different resource group):
+
+```bash
+# reuse rg and aks_name from the cluster setup above
+bastion_id="<bastion-resource-id>"
+az aks bastion tunnel -g "$rg" -n "$aks_name" --bastion "$bastion_id"
+# the command opens a subshell with a temporary kubeconfig for the tunnel
+kubectl get nodes
+helm list -A
+# run subsequent kubectl/helm commands in this subshell; exit to close the tunnel
+```
+
+The CLI handles the tunnel kubeconfig within its subshell; don't overwrite your normal kubeconfig or use `--admin` unless cluster-admin credentials are necessary and permitted. The remaining examples show the **optional VM path** using `remote` and `scp`. For the tunnel path, run `kubectl`/`helm` locally inside the Bastion subshell and apply the locally rendered manifests directly (for example, `kubectl apply -f "$tmp_file"` instead of copying it to the VM). Bastion tunnels **only the API connection**: local `curl` to a private Service or private Gateway IP still needs a reachable network, a suitable `kubectl port-forward`, or an external URL through the configured firewall. Keep Azure CLI resource-creation commands in the original authorized workstation shell.
+
+### Optional jump VM path
+
+Alternatively, install a VM in a connected VNet and install `kubectl` there to access the private API. The commands below demonstrate that path; they are not a prerequisite for the Bastion tunnel option.
 
 ```bash
 # Variables
@@ -534,16 +554,14 @@ remote 'echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee 
 remote 'sudo apt-get update && sudo apt-get install helm'
 # Install additional utilities
 remote "sudo apt-get install -y jq"
-linkerd_version=stable-2.8.1
-remote "curl -sLO \"https://github.com/linkerd/linkerd2/releases/download/${linkerd_version}/linkerd2-cli-${linkerd_version}-linux\""
-remote "sudo cp ./linkerd2-cli-${linkerd_version}-linux /usr/local/bin/linkerd"
-remote "sudo chmod +x /usr/local/bin/linkerd"
 
 # Cluster-info
 remote "az login --identity -u $vm_identity_id"
 remote "az aks get-credentials -n $aks_name -g $rg"
 remote "kubectl get node"
 ```
+
+For the service mesh exercise, the AKS-managed Istio walkthrough in [Challenge 7](./Solution-07.md) needs no separate mesh CLI; other mesh options may require one, locally or on the optional VM.
 
 Create now the Azure SQL database and the private link endpoint (you could use the same database as in challenge 1 though):
 
