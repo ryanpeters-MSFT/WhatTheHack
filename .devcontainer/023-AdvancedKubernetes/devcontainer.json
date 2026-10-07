@@ -1,6 +1,6 @@
 {
   "name": "023-AdvancedKubernetes",
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "remoteUser": "codespace",
   "containerUser": "codespace",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/023-AdvancedKubernetes/Student/Resources",
