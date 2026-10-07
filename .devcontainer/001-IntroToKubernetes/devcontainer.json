@@ -1,12 +1,17 @@
 {
   "name": "001-IntroToKubernetes",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "workspaceFolder": "/workspace/001-IntroToKubernetes/Student/Resources",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "remoteUser": "codespace",
+  "containerUser": "codespace",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/001-IntroToKubernetes/Student/Resources",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
   "hostRequirements": {
     "cpus": 2
   },
   "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "codespace"
+    },
     "ghcr.io/devcontainers/features/azure-cli:1": {
       "installBicep": true
     },
